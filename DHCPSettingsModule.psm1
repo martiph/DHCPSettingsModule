@@ -154,7 +154,7 @@ function Get-DHCPStatus{
 
         #create the object
         if($ip -ne $null -and $netmask -ne $null){
-            $output = [PSCustomObject]@{
+            $output += [PSCustomObject]@{
                 InterfaceAlias = $InterfaceAlias
                 IPAddress = $ip
                 PrefixLength = $netmask
@@ -164,6 +164,6 @@ function Get-DHCPStatus{
                 RenewPossible = $renew
             }
         }
-        return $output
     }
+    return $output
 }
