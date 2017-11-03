@@ -1,6 +1,6 @@
 ###################################################################
 ###################################################################
-### This module is thought to determine if DHCP works correctly ###
+### This script is thought to determine if DHCP works correctly ###
 ### author: Corporate Software, Philip Marti                    ###
 ###################################################################
 ###################################################################
