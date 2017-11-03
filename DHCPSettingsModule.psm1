@@ -12,11 +12,16 @@ function Get-DHCPStatus {
     $IPObjects = Get-IPAddressCIDR
     $GatewayObjects = Get-DefaultGateway
     $DNSObjects = Get-DNSServer
+    $i = 0
 
     foreach ($a in $Adapter) {
-        
+        $allOtherInterfaces = $Adapter | Where-Object {$_.InterfaceAlias -ne $a.Name}
+        Disable-NetAdapter -Name $allOtherInterfaces.InterfaceAlias -Confirm:$false
+        Start-Sleep -Seconds 60 #Hopefully enough time for the adapter to connect
+        Write-Host $i
+
         # initialize some variables
-        $InterfaceAlias = $a
+        $InterfaceAlias = $a.Name
         $ip = $null
         $netmask = $null
         $lease = $null
@@ -29,7 +34,7 @@ function Get-DHCPStatus {
         # Make some calculations and assignments
         
         foreach ($ipobj in $IPObjects) {
-            if ($ipobj.InterfaceAlias -eq $a) {
+            if ($ipobj.InterfaceAlias -eq $a.Name) {
                 $ip = $ipobj.IPAddress
                 $netmask = $ipobj.PrefixLength
                 $lease = $ipobj.ValidLifetime
@@ -37,22 +42,22 @@ function Get-DHCPStatus {
         }
 
         foreach ($gw in $GatewayObjects) {
-            if ($gw.InterfaceAlias -eq $a) {
+            if ($gw.InterfaceAlias -eq $a.Name) {
                 $gateway = $gw.DefaultGateway
             }
         }
 
         foreach ($dnsobj in $DNSObjects) {
-            if ($dnsobj.InterfaceAlias -eq $a) {
+            if ($dnsobj.InterfaceAlias -eq $a.Name) {
                 $dns = $dnsobj.IPv4Address
             }
         }
 
         # check if the release of the ip address is working
-        ipconfig.exe /release $a > $null
+        ipconfig.exe /release $a.Name > $null
         $IPObjects_2 = Get-IPAddressCIDR
         foreach ($ipobj in $IPObjects_2) {
-            if ($ipobj.InterfaceAlias -eq $a) {
+            if ($ipobj.InterfaceAlias -eq $a.Name) {
                 $ip_a = $ipobj.IPAddress
             }
         } 
@@ -65,10 +70,10 @@ function Get-DHCPStatus {
 
         # check if the renew of the ip address is working
         $ip_a = $null
-        ipconfig.exe /renew $a > $null
+        ipconfig.exe /renew $a.Name > $null
         $IPObjects_3 = Get-IPAddressCIDR
         foreach ($ipobj in $IPObjects_3) {
-            if ($ipobj.InterfaceAlias -eq $a) {
+            if ($ipobj.InterfaceAlias -eq $a.Name) {
                 $ip_a = $ipobj.IPAddress
             }
         } 
@@ -80,32 +85,31 @@ function Get-DHCPStatus {
         }
 
         #create the object
-        if ($ip -ne $null -and $netmask -ne $null) {
-            $output += [PSCustomObject]@{
-                InterfaceAlias  = $InterfaceAlias
-                IpAddress       = $ip
-                PrefixLength    = $netmask
-                ValidLifetime   = $lease
-                DefaultGateway  = $gateway
-                DNSServer       = $dns
-                ReleasePossible = $release
-                RenewPossible   = $renew
-            }
+        #if ($ip -ne $null -and $netmask -ne $null) {
+        [array]$output += [PSCustomObject]@{
+            InterfaceAlias  = $InterfaceAlias
+            IpAddress       = $ip
+            PrefixLength    = $netmask
+            ValidLifetime   = $lease
+            DefaultGateway  = $gateway
+            DNSServer       = $dns
+            ReleasePossible = $release
+            RenewPossible   = $renew
         }
+        #}
+        Enable-NetAdapter -Name $allOtherInterfaces.InterfaceAlias
+        $i ++
     }
+    Write-Host $i+$i
     return $output
 }
 
 ### Helping Functions ###
 
-# Get all running adapters which are in ["Ethernet", "Wi-Fi", "WLAN"]
+# Get all adapters which are in ["Ethernet", "Wi-Fi", "WLAN"]
 function Get-Adapter {
-    [array]$AdapterName = $null
-    Get-NetAdapter | ForEach-Object {
-        if ($_.Status -eq "Up" -and ($_.Name -eq "Ethernet" -or $_.Name -eq "Wi-Fi" -or $_.Name -eq "WLAN")) {
-            [array]$AdapterName += $_.Name
-        }
-    }
+    [array]$adapternames = @("Ethernet", "Wi-Fi", "WLAN")
+    [array]$AdapterName = Get-NetAdapter -Name $adapternames -ErrorAction SilentlyContinue
     return $AdapterName
 }
 
@@ -116,11 +120,11 @@ function Get-IPAddressCIDR {
     [array]$wishedInterface = $null # All interfaces which received their Lease from DHCP and their IPAddressFamily is not IPv6
     $IPObject = $null # Element of the Interface_IPAddress_Subnetmask Array
 
-    $wishedInterface = Get-NetIPAddress -InterfaceAlias $adapter| Where-Object {$_.PrefixOrigin -eq "Dhcp"}
+    $wishedInterface = Get-NetIPAddress -InterfaceAlias $adapter.Name -PrefixOrigin "Dhcp" -AddressFamily "IPv4"
     foreach ($interface in $wishedInterface) {
         $IPObject = [PSCustomObject]@{
             InterfaceAlias = $interface.InterfaceAlias
-            IPAddress      = $interface.IPAddress
+            IPAddress      = $interface.IPv4Address
             PrefixLength   = $interface.PrefixLength
             ValidLifetime  = $interface.ValidLifetime
         }
